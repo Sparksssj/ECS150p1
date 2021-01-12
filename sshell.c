@@ -5,7 +5,7 @@
 #include <sys/wait.h>
 #include <stdbool.h>
 
-
+//declearations
 int mysyscall(char *inputcmd);
 char** parsecmd(char *cmd, char** storedstr);
 bool checkmultipleargs(char *cmd);
@@ -61,21 +61,28 @@ int mysyscall(char *inputcmd)
 {
 
     char* cmd;
+    //remove the leading white spaces
     cmd = removeleadingspaces(inputcmd);
+
+    //check whether there is any argument
     bool multargs = checkmultipleargs(cmd);
 
-    if (multargs){
+    if (multargs){ // if there are some arguments
 
+
+        // create an array of char* to store parsed string
         unsigned long init_length = strlen(cmd);
         char* storedstr[init_length];
-
         char** parsedcmd;
+
+        // store the parsed cmd in the array
         parsedcmd = parsecmd(cmd, storedstr);
 
-
-        pid_t pid;
+        // set the arguments
         char *args[] = {parsedcmd[0], parsedcmd[1], NULL};
 
+        // TO BE packed into a funtion
+        pid_t pid;
         pid = fork();
         if (pid == 0) {
             execvp(cmd, args);
@@ -90,6 +97,7 @@ int mysyscall(char *inputcmd)
         }
 
     } else{
+        // execute 1 argument program
         return (excenoarg(cmd));
     }
 
@@ -97,24 +105,28 @@ int mysyscall(char *inputcmd)
 }
 
 
-char** parsecmd(char *cmd, char** storedstr){
-//https://www.codingame.com/playgrounds/14213/how-to-play-with-strings-in-c/string-split
-    char* str = cmd;
-    char delim[] = " ";
+char** parsecmd(char *cmd, char** storedstr){ // parse the cmd by white spaces
 
-    char *ptr = strtok(str, delim);
+//https://www.codingame.com/playgrounds/14213/how-to-play-with-strings-in-c/string-split
+
+    char* str = cmd;
+    char Deliminator[] = " ";
+
+    char *ptr = strtok(str, Deliminator);
     int i = 0;
 
+    //store every separated command into the array
     while (ptr != NULL)
     {
         storedstr[i] = ptr;
-        ptr = strtok(NULL, delim);
+        ptr = strtok(NULL, Deliminator);
         i++;
     }
     return storedstr;
 }
 
-bool checkmultipleargs(char *cmd){
+bool checkmultipleargs(char *cmd){ // check if there are multiple areguments
+
     char duplicatedcmd[strlen(cmd)];
     strcpy(duplicatedcmd, cmd);
 
@@ -127,21 +139,21 @@ bool checkmultipleargs(char *cmd){
         ptr = strtok(NULL, Delimiter);
         i ++;
     }
+    // if there are only 1 arguments, the loop will only loop once, in which case i will equal to 1
     if (i == 1) return false;
     else return true;
 }
 
-int excenoarg(char* cmd){
+int excenoarg(char* cmd){ // execute the no argument command
     pid_t pid;
+    // set the default args
     char *args[] = {cmd, NULL, NULL};
-    char Delimiter[] = " ";
-
-    char *ptr = strtok(cmd, Delimiter);
 
 
+    // TO BE packed
     pid = fork();
     if (pid == 0) {
-        execvp(ptr, args);
+        execvp(cmd, args);
         perror("execvp");
         exit(1);
     } else if (pid > 0){
@@ -153,8 +165,9 @@ int excenoarg(char* cmd){
     }
 }
 
-char* removeleadingspaces(char* cmd){
+char* removeleadingspaces(char* cmd){ // remvoe the leading spaces of user input
     //https://www.geeksforgeeks.org/c-program-to-trim-leading-white-spaces-from-string/
+    //TO BE MODIFIED
     static char removedstr[99];
     int count = 0, j, k;
 
@@ -164,9 +177,7 @@ char* removeleadingspaces(char* cmd){
         count++;
     }
 
-    // Putting string into another
-    // string variable after
-    // removing leading white spaces
+
     for (j = count, k = 0;
          cmd[j] != '\0'; j++, k++) {
         removedstr[k] = cmd[j];
