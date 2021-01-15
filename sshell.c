@@ -1,3 +1,4 @@
+#define _GNU_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -5,12 +6,15 @@
 #include <sys/wait.h>
 #include <stdbool.h>
 
-//declearations
+
+//declarations
 int mysyscall(char *inputcmd);
 char** parsecmd(char *cmd, char** storedstr);
 bool checkmultipleargs(char *cmd);
 int excenoarg(char* cmd);
 char* removeleadingspaces(char* cmd);
+int forkandexce(char* cmd, char** args);
+int changedir(char** parsedcmd);
 #define CMDLINE_MAX 512
 
 
@@ -24,7 +28,7 @@ int main(void)
                 int retval;
 
                 /* Print prompt */
-                printf("sshell$ ");
+                printf("sshell@ucd$ ");
                 fflush(stdout);
 
                 /* Get command line */
@@ -43,14 +47,17 @@ int main(void)
 
                 /* Builtin command */
                 if (!strcmp(cmd, "exit")) {
+                    //QUESTION!
                         fprintf(stderr, "Bye...\n");
+                        fprintf(stdout, "Return status value for '%s': %d\n",
+                            cmd, 0);
                         break;
                 }
 
                 /* Regular command */
 
                 retval = mysyscall(cmd);
-                fprintf(stdout, "Return status value for '%s': %d\n",
+                fprintf(stdout, "+ completed '%s' [%d]\n",
                         cmd, retval);
         }
 
@@ -78,23 +85,14 @@ int mysyscall(char *inputcmd)
         // store the parsed cmd in the array
         parsedcmd = parsecmd(cmd, storedstr);
 
+        if (!strcmp(parsedcmd[0], "cd")){
+            return (changedir(parsedcmd));
+        }
+
         // set the arguments
         char *args[] = {parsedcmd[0], parsedcmd[1], NULL};
 
-        // TO BE packed into a funtion
-        pid_t pid;
-        pid = fork();
-        if (pid == 0) {
-            execvp(cmd, args);
-            perror("execvp");
-            exit(1);
-        } else if (pid > 0){
-            int status;
-            waitpid(pid, &status, 0);
-            return status;
-        } else{
-            return 1;
-        }
+        return (forkandexce(cmd,args));
 
     } else{
         // execute 1 argument program
@@ -125,12 +123,12 @@ char** parsecmd(char *cmd, char** storedstr){ // parse the cmd by white spaces
     return storedstr;
 }
 
-bool checkmultipleargs(char *cmd){ // check if there are multiple areguments
+bool checkmultipleargs(char *cmd){ // check if there are multiple arguments
 
+    char Delimiter[] = " ";
     char duplicatedcmd[strlen(cmd)];
     strcpy(duplicatedcmd, cmd);
 
-    char Delimiter[] = " ";
 
     char *ptr = strtok(duplicatedcmd, Delimiter);
     int i = 0;
@@ -145,16 +143,47 @@ bool checkmultipleargs(char *cmd){ // check if there are multiple areguments
 }
 
 int excenoarg(char* cmd){ // execute the no argument command
-    pid_t pid;
+
     // set the default args
     char *args[] = {cmd, NULL, NULL};
 
+    //TODO
+    if (!strcmp(cmd, "pwd")){
+        printf("%s\n", get_current_dir_name());
+        return 0;
+    } else{
+        return (forkandexce(cmd, args));
+    }
+}
 
-    // TO BE packed
+char* removeleadingspaces(char* cmd){ // remove the leading spaces of user input
+    //https://www.geeksforgeeks.org/c-program-to-trim-leading-white-spaces-from-string/
+    //TO BE MODIFIED
+    static char removedstr[99];
+    int count = 0;
+    int j, k;
+
+    // Iterate String until last
+    // leading space character
+    while (cmd[count] == ' ') {
+        count++;
+    }
+
+    for (j = count, k = 0;
+         cmd[j] != '\0'; j++, k++) {
+        removedstr[k] = cmd[j];
+    }
+    removedstr[k] = '\0';
+
+    return removedstr;
+}
+
+int forkandexce(char* cmd, char** args){
+    pid_t pid;
     pid = fork();
     if (pid == 0) {
         execvp(cmd, args);
-        perror("execvp");
+        fprintf(stderr, "command not found\n");
         exit(1);
     } else if (pid > 0){
         int status;
@@ -165,24 +194,35 @@ int excenoarg(char* cmd){ // execute the no argument command
     }
 }
 
-char* removeleadingspaces(char* cmd){ // remvoe the leading spaces of user input
-    //https://www.geeksforgeeks.org/c-program-to-trim-leading-white-spaces-from-string/
-    //TO BE MODIFIED
-    static char removedstr[99];
-    int count = 0, j, k;
+int changedir(char** parsedcmd){
 
-    // Iterate String until last
-    // leading space character
-    while (cmd[count] == ' ') {
-        count++;
+    int chdirresult = chdir(parsedcmd[1]);
+
+    if (chdirresult == -1){
+        fprintf(stderr, "cannot cd into directory\n");
+        return 1;
     }
 
+    return 0;
 
-    for (j = count, k = 0;
-         cmd[j] != '\0'; j++, k++) {
-        removedstr[k] = cmd[j];
-    }
-    removedstr[k] = '\0';
 
-    return removedstr;
+//    pid_t pid;
+//    pid = fork();
+//    if (pid == 0) {
+//        int chdirresult;
+//        chdirresult = chdir(parsedcmd[1]);
+//        if (chdirresult == -1){
+//            perror("Error: ");
+//            exit(1);
+//        } else{
+//            exit(0);
+//        }
+//
+//    } else if (pid > 0){
+//        int status;
+//        waitpid(pid, &status, 0);
+//        return status;
+//    } else{
+//        return 1;
+//    }
 }
