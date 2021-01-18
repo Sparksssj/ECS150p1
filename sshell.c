@@ -111,6 +111,8 @@ int mysyscall(char *inputcmd, int* message)
     //parsing of the output redirection from the command line
     rdc = checkredirection(pip[numpipe-1]);
 
+
+
     pid = fork();
     if (pid > 0) {
         int status;
@@ -195,7 +197,7 @@ void forkandexce(char* cmd, char** args, char** rrdc, bool last){
         redirection(rrdc[2]);
     }
     execvp(cmd, args);
-    fprintf(stderr, "command not found\n");
+    perror("Error");
     exit(1);
 }
 
@@ -204,11 +206,11 @@ int changedir(char** parsedcmd) {
     int chdirresult = chdir(parsedcmd[1]);
 
     if (chdirresult == -1) {
-        fprintf(stderr, "cannot cd into directory\n");
-        return 1;
+        perror("Error");
+        exit(1);
     }
 
-    return 0;
+    exit(0);
 }
 
 char** checkredirection(char* cmd) {
@@ -276,7 +278,11 @@ char* removetrailingspaces(char* str, unsigned long length){
 
 void choosenumpipe(char** pip, int numpipe, int curpipe, char** rdc, int message[], int* fdarray[]) {
     if (numpipe == 1){
-        handlearguments(pip[0], rdc, true);
+        if (!(strcmp(rdc[1], ">"))){
+            handlearguments(rdc[0], rdc, true);
+        } else {
+            handlearguments(pip[0], rdc, true);
+        }
         return;
     }
     int fd[2];
@@ -292,7 +298,11 @@ void choosenumpipe(char** pip, int numpipe, int curpipe, char** rdc, int message
             close(fdarray[curpipe-2][1]);
             dup2(fdarray[curpipe-2][0], STDIN_FILENO);
             close(fdarray[curpipe-2][0]);
-            handlearguments(pip[numpipe-1], rdc, true);
+            if (!(strcmp(rdc[1], ">"))){
+                handlearguments(rdc[0], rdc, true);
+            } else {
+                handlearguments(pip[numpipe-1], rdc, true);
+            }
         }
         if  (curpipe < numpipe){
             dup2(fdarray[curpipe-2][0], STDIN_FILENO);
