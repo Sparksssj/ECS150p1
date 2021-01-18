@@ -20,11 +20,7 @@ char** checkredirection(char* cmd);
 void redirection(char* filename);
 char** checkpipe(char* cmd, int* numpipe);
 char* removetrailingspaces(char* str, unsigned long length);
-void choosenumpipe(char** pipe, int numpipe, int curpipe, char** rdc, int* message, int fd[]);
-void onepipe(char** pipe, char** rdc, int* message);
-void twopipe(char** pipe, char** rdc);
-void threepipe(char** pipe, char** rdc, int* message);
-void fourpipe(char** pipe, char** rdc);
+void choosenumpipe(char** pipe, int numpipe, int curpipe, char** rdc, int* message, int* fdarray[]);
 void handlearguments(char* cmd, char** rdc, bool last);
 #define CMDLINE_MAX 512
 
@@ -102,7 +98,7 @@ int mysyscall(char *inputcmd, int* message)
     char** pip;
     int numpipe;
     int curpipe;
-    int fd[2];
+    int* fdarray[3];
     pid_t pid;
     //remove the leading white spaces
     cmd = removeleadingspaces(inputcmd);
@@ -120,40 +116,10 @@ int mysyscall(char *inputcmd, int* message)
         waitpid(pid, &status, 0);
         message[numpipe-1] = status;
     } else {
-        pipe(fd);
-        choosenumpipe(pip, numpipe, curpipe, rdc, message, fd);
+        choosenumpipe(pip, numpipe, curpipe, rdc, message, fdarray);
     }
 
     return numpipe;
-    //check whether there is any argument
-    //bool multargs = checkmultipleargs(cmd);
-
-    //if (multargs){ // if there are some arguments
-
-
-    // create an array of char* to store parsed string
-    //unsigned long init_length = strlen(cmd);
-    //char* storedstr[init_length];
-    //char** parsedcmd;
-
-    // store the parsed cmd in the array
-    //parsedcmd = parsecmd(cmd, storedstr);
-
-    //if (!strcmp(parsedcmd[0], "cd")){
-    //    return (changedir(parsedcmd));
-    //}
-
-    // set the arguments
-    //char *args[] = {parsedcmd[0], parsedcmd[1], NULL};
-
-    //return (forkandexce(cmd,args,rdc));
-
-    //} else{
-    // execute 1 argument program
-    //return (excenoarg(cmd,rdc));
-    //}
-
-
 }
 
 
@@ -228,7 +194,6 @@ void forkandexce(char* cmd, char** args, char** rrdc, bool last){
     if ((!(strcmp(rrdc[1], ">"))) && (last == true)){
         redirection(rrdc[2]);
     }
-    fprintf(stderr,"%s\n", cmd);
     execvp(cmd, args);
     fprintf(stderr, "command not found\n");
     exit(1);
@@ -309,117 +274,47 @@ char* removetrailingspaces(char* str, unsigned long length){
     return str;
 }
 
-void choosenumpipe(char** pip, int numpipe, int curpipe, char** rdc, int message[], int fd[]) {
+void choosenumpipe(char** pip, int numpipe, int curpipe, char** rdc, int message[], int* fdarray[]) {
     if (numpipe == 1){
         handlearguments(pip[0], rdc, true);
         return;
     }
+    int fd[2];
+    pipe(fd);
+    fdarray[curpipe-2] = fd;
     pid_t pid;
     pid = fork();
     if (pid > 0) {
         int status;
         waitpid(pid, &status, 0);
-        fprintf(stderr,"%d\n", curpipe);
         message[curpipe-2] = status;
         if (curpipe == numpipe) {
-            fprintf(stderr,"d\n");
-            close(fd[1]);
-            dup2(fd[0], STDIN_FILENO);
-            close(fd[0]);
+            close(fdarray[curpipe-2][1]);
+            dup2(fdarray[curpipe-2][0], STDIN_FILENO);
+            close(fdarray[curpipe-2][0]);
             handlearguments(pip[numpipe-1], rdc, true);
         }
         if  (curpipe < numpipe){
-            fprintf(stderr,"c\n");
-            fprintf(stderr,"%s\n", pip[curpipe-1]);
-            dup2(fd[0], STDIN_FILENO);
-            dup2(fd[1], STDOUT_FILENO);
-            close(fd[0]);
-            close(fd[1]);
+            dup2(fdarray[curpipe-2][0], STDIN_FILENO);
+            dup2(fdarray[curpipe-1][1], STDOUT_FILENO);
+            close(fdarray[curpipe-2][0]);
+            close(fdarray[curpipe-2][1]);
+            close(fdarray[curpipe-1][0]);
+            close(fdarray[curpipe-1][1]);
             handlearguments(pip[curpipe-1], rdc, false);
         }
     } else if (pid == 0) {
         if (curpipe > 2){
-            fprintf(stderr,"b\n");
-            choosenumpipe(pip, numpipe, curpipe-1, rdc, message, fd);
+            choosenumpipe(pip, numpipe, curpipe-1, rdc, message, fdarray);
         } else {
-            fprintf(stderr,"a\n");
-            close(fd[0]);
-            dup2(fd[1], STDOUT_FILENO);
-            close(fd[1]);
+            close(fdarray[curpipe-2][0]);
+            dup2(fdarray[curpipe-2][1], STDOUT_FILENO);
+            close(fdarray[curpipe-2][1]);
             handlearguments(pip[0], rdc, false);
         }
     } else {
         message[numpipe-curpipe] = -1;
     }
-}
-
-
-void onepipe(char** pip, char** rdc, int* message){
-    pid_t pid;
-    pid = fork();
-    if (pid > 0){
-        int status;
-        waitpid(pid, &status, 0);
-        message[0] = status;
-    } else if (pid == 0){
-        handlearguments(pip[0], rdc, true);
-    } else {
-        message[0] = -1;
-    }
-}
-
-void twopipe(char** pip, char** rdc){
-
-}
-
-void threepipe(char** pip, char** rdc, int* message){
-    pid_t pid;
-    pid = fork();
-    if (pid > 0){
-        int status;
-        waitpid(pid, &status, 0);
-        message[0] = status;
-    } else if (pid == 0){
-        int fd[2];
-        pipe(fd);
-        pid = fork();
-        if (pid > 0) {
-            int status;
-            waitpid(pid, &status, 0);
-            message[1] = status;
-            close(fd[1]);
-            dup2(fd[0], STDIN_FILENO);
-            close(fd[0]);
-            handlearguments(pip[2], rdc, true);
-        } else if (pid == 0){
-            pid = fork();
-            if (pid > 0) {
-                int status;
-                waitpid(pid, &status, 0);
-                message[2] = status;
-                dup2(fd[0], STDIN_FILENO);
-                dup2(fd[1], STDOUT_FILENO);
-                close(fd[0]);
-                close(fd[1]);
-                handlearguments(pip[1], rdc, false);
-            } else if (pid == 0){
-                close(fd[0]);
-                dup2(fd[1], STDOUT_FILENO);
-                close(fd[1]);
-                handlearguments(pip[0], rdc, false);
-            } else {
-                message[2] = -1;
-            }
-        } else {
-            message[1] = -1;
-        }
-    } else {
-        message[0] = -1;
-    }
-}
-
-void fourpipe(char** pip, char** rdc){
-
 }
 
 void handlearguments(char* cmd, char** rdc, bool last){
