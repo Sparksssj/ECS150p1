@@ -10,7 +10,7 @@
 
 //declarations
 int mysyscall(char *inputcmd, int* message);
-char** parsecmd(char *cmd, char** storedstr);
+char** parsecmd(char *cmd, char** storedstr, int* numargs);
 bool checkmultipleargs(char *cmd);
 void excenoarg(char* cmd, char** rrdc, bool last);
 char* removeleadingspaces(char* cmd);
@@ -33,7 +33,7 @@ int main(void)
 
     while (1) {
         char *nl;
-        int retval;
+
 
         /* Print prompt */
         printf("sshell@ucd$ ");
@@ -65,6 +65,7 @@ int main(void)
         /* Regular command */
 
         int numpipe = mysyscall(cmd, message);
+
         switch(numpipe) {
             case 1:
                 fprintf(stdout, "+ completed '%s' [%d]\n",
@@ -123,7 +124,7 @@ int mysyscall(char *inputcmd, int* message)
 }
 
 
-char** parsecmd(char *cmd, char** storedstr){ // parse the cmd by white spaces
+char** parsecmd(char *cmd, char** storedstr, int* numargs){ // parse the cmd by white spaces
 
 //https://www.codingame.com/playgrounds/14213/how-to-play-with-strings-in-c/string-split
 
@@ -131,14 +132,13 @@ char** parsecmd(char *cmd, char** storedstr){ // parse the cmd by white spaces
     char Deliminator[] = " ";
 
     char *ptr = strtok(str, Deliminator);
-    int i = 0;
 
     //store every separated command into the array
     while (ptr != NULL)
     {
-        storedstr[i] = ptr;
+        storedstr[*numargs] = ptr;
         ptr = strtok(NULL, Deliminator);
-        i++;
+        (*numargs)++;
     }
     return storedstr;
 }
@@ -178,7 +178,7 @@ void excenoarg(char* cmd, char** rrdc, bool last){ // execute the no argument co
 }
 
 char* removeleadingspaces(char* cmd){
-    unsigned long numspaces;
+    unsigned long numspaces = 0;
     unsigned long length = strlen(cmd);
     for (unsigned long i = 0; i < length; i++){
         if (cmd[i] != ' '){
@@ -318,6 +318,8 @@ void choosenumpipe(char** pip, int numpipe, int curpipe, char** rdc, int message
 }
 
 void handlearguments(char* cmd, char** rdc, bool last){
+
+    int numargs = 0;
     bool multargs = checkmultipleargs(cmd);
 
     if (multargs){ // if there are some arguments
@@ -329,14 +331,22 @@ void handlearguments(char* cmd, char** rdc, bool last){
         char** parsedcmd;
 
         // store the parsed cmd in the array
-        parsedcmd = parsecmd(cmd, storedstr);
+        parsedcmd = parsecmd(cmd, storedstr, &numargs);
 
         if (!strcmp(parsedcmd[0], "cd")){
             changedir(parsedcmd);
         }
 
         // set the arguments
-        char *args[] = {parsedcmd[0], parsedcmd[1], NULL};
+
+        char **args = malloc(sizeof(char*)*(numargs+1));
+
+        for (int i = 0; i < numargs; ++i) {
+            args[i] = parsedcmd[i];
+        }
+        args[-1] = NULL;
+
+
 
         forkandexce(cmd,args,rdc,last);
 
@@ -345,22 +355,3 @@ void handlearguments(char* cmd, char** rdc, bool last){
         excenoarg(cmd,rdc,last);
     }
 }
-//    pid_t pid;
-//    pid = fork();
-//    if (pid == 0) {
-//        int chdirresult;
-//        chdirresult = chdir(parsedcmd[1]);
-//        if (chdirresult == -1){
-//            perror("Error: ");
-//            exit(1);
-//        } else{
-//            exit(0);
-//        }
-//
-//    } else if (pid > 0){
-//        int status;
-//        waitpid(pid, &status, 0);
-//        return status;
-//    } else{
-//        return 1;
-//    }
