@@ -9,7 +9,7 @@
 
 
 //declarations
-int mysyscall(char *inputcmd, int* message);
+int mysyscall(char *inputcmd, int* message, char** storedvariable);
 char** parsecmd(char *cmd, char** storedstr, int* numargs);
 bool checkmultipleargs(char *cmd);
 void excenoarg(char* cmd, char** rrdc, bool last);
@@ -20,20 +20,24 @@ char** checkredirection(char* cmd);
 void redirection(char* filename);
 char** checkpipe(char* cmd, int* numpipe);
 char* removetrailingspaces(char* str, unsigned long length);
-void choosenumpipe(char** pipe, int numpipe, int curpipe, char** rdc, int* message, int* fdarray[]);
+void multpipe(char** pipe, int numpipe, int curpipe, char** rdc, int* message, int* fdarray[]);
 void handlearguments(char* cmd, char** rdc, bool last);
+void handlespecialcmd(char** parsedcmd, int numargs);
+int setavariable(char** parsedcmd);
+//void displayvariable(char** parsedcmd, char** storedvariable);
+void onepipe(char** pipe, char** rdc, int* message);
+int nonforkfunc(char* cmd);
 #define CMDLINE_MAX 512
-
-
+char* storedvariable[26];
 
 int main(void)
 {
+   // char **storedvariable = malloc(sizeof(char*) * 26);
     char cmd[CMDLINE_MAX];
     int* message = malloc(sizeof(int)*4);
 
     while (1) {
         char *nl;
-
 
         /* Print prompt */
         printf("sshell@ucd$ ");
@@ -41,6 +45,10 @@ int main(void)
 
         /* Get command line */
         fgets(cmd, CMDLINE_MAX, stdin);
+
+
+
+
 
         /* Print command line if stdin is not provided by terminal */
         if (!isatty(STDIN_FILENO)) {
@@ -53,6 +61,7 @@ int main(void)
         if (nl)
             *nl = '\0';
 
+        if(!strcmp(removeleadingspaces(cmd),"")) continue;
         /* Builtin command */
         if (!strcmp(cmd, "exit")) {
             //QUESTION!
@@ -64,35 +73,21 @@ int main(void)
 
         /* Regular command */
 
-        int numpipe = mysyscall(cmd, message);
+        int numpipe = mysyscall(cmd, message, storedvariable);
 
-        switch(numpipe) {
-            case 1:
-                fprintf(stdout, "+ completed '%s' [%d]\n",
-                        cmd, message[0]);
-                break;
-            case 2:
-                fprintf(stdout, "+ completed '%s' [%d][%d]\n",
-                        cmd, message[0], message[1]);
-                break;
-            case 3:
-                fprintf(stdout, "+ completed '%s' [%d][%d][%d]\n",
-                        cmd, message[0], message[1], message[2]);
-                break;
-            case 4:
-                fprintf(stdout, "+ completed '%s' [%d][%d][%d][%d]\n",
-                        cmd, message[0], message[1], message[2], message[3]);
-                break;
-            default:
-                break;
+
+        fprintf(stdout, "+ completed '%s' ",cmd);
+        for (int i = 0; i < numpipe; ++i) {
+            fprintf(stdout, "[%d]", message[i]/256);
         }
+        fprintf(stdout, "\n");
 
     }
 
     return EXIT_SUCCESS;
 }
 
-int mysyscall(char *inputcmd, int* message)
+int mysyscall(char *inputcmd, int* message, char** storedvariable)
 {
     char* cmd;
     char** rdc;
@@ -113,13 +108,23 @@ int mysyscall(char *inputcmd, int* message)
 
 
 
-    pid = fork();
-    if (pid > 0) {
-        int status;
-        waitpid(pid, &status, 0);
-        message[numpipe-1] = status;
+    if (numpipe == 1){
+        int whethernonfork;
+
+        whethernonfork = nonforkfunc(cmd);
+        if (whethernonfork){
+            return (whethernonfork -1);
+        }
+        onepipe(pip, rdc, message);
     } else {
-        choosenumpipe(pip, numpipe, curpipe, rdc, message, fdarray);
+        pid = fork();
+        if (pid > 0) {
+            int status;
+            waitpid(pid, &status, 0);
+            message[numpipe-1] = status;
+        } else {
+            multpipe(pip, numpipe, curpipe, rdc, message, fdarray);
+        }
     }
 
     return numpipe;
@@ -182,7 +187,7 @@ void excenoarg(char* cmd, char** rrdc, bool last){ // execute the no argument co
 char* removeleadingspaces(char* cmd){
     unsigned long numspaces = 0;
     unsigned long length = strlen(cmd);
-    for (unsigned long i = 0; i < length; i++){
+    for (unsigned long i = 0; i < length+1; i++){
         if (cmd[i] != ' '){
             numspaces = i;
             break;
@@ -276,15 +281,7 @@ char* removetrailingspaces(char* str, unsigned long length){
     return str;
 }
 
-void choosenumpipe(char** pip, int numpipe, int curpipe, char** rdc, int message[], int* fdarray[]) {
-    if (numpipe == 1){
-        if (!(strcmp(rdc[1], ">"))){
-            handlearguments(rdc[0], rdc, true);
-        } else {
-            handlearguments(pip[0], rdc, true);
-        }
-        return;
-    }
+void multpipe(char** pip, int numpipe, int curpipe, char** rdc, int message[], int* fdarray[]) {
     int fd[2];
     pipe(fd);
     fdarray[curpipe-2] = fd;
@@ -315,7 +312,7 @@ void choosenumpipe(char** pip, int numpipe, int curpipe, char** rdc, int message
         }
     } else if (pid == 0) {
         if (curpipe > 2){
-            choosenumpipe(pip, numpipe, curpipe-1, rdc, message, fdarray);
+            multpipe(pip, numpipe, curpipe-1, rdc, message, fdarray);
         } else {
             close(fdarray[curpipe-2][0]);
             dup2(fdarray[curpipe-2][1], STDOUT_FILENO);
@@ -332,8 +329,8 @@ void handlearguments(char* cmd, char** rdc, bool last){
     int numargs = 0;
     bool multargs = checkmultipleargs(cmd);
 
-    if (multargs){ // if there are some arguments
 
+    if (multargs){ // if there are some arguments
 
         // create an array of char* to store parsed string
         unsigned long init_length = strlen(cmd);
@@ -343,12 +340,10 @@ void handlearguments(char* cmd, char** rdc, bool last){
         // store the parsed cmd in the array
         parsedcmd = parsecmd(cmd, storedstr, &numargs);
 
-        if (!strcmp(parsedcmd[0], "cd")){
-            changedir(parsedcmd);
-        }
+        handlespecialcmd(parsedcmd, numargs);
+
 
         // set the arguments
-
         char **args = malloc(sizeof(char*)*(numargs+1));
 
         for (int i = 0; i < numargs; ++i) {
@@ -356,12 +351,81 @@ void handlearguments(char* cmd, char** rdc, bool last){
         }
         args[-1] = NULL;
 
-
-
-        forkandexce(cmd,args,rdc,last);
+        forkandexce(parsedcmd[0],args,rdc,last);
 
     } else{
         // execute 1 argument program
         excenoarg(cmd,rdc,last);
     }
+}
+
+void handlespecialcmd(char** parsedcmd, int numargs){
+
+
+    for (int i = 0; i < numargs; ++i) {
+        if (parsedcmd[i][0] == '$') {
+            parsedcmd[i] = strdup(storedvariable[parsedcmd[i][1]-97]);
+        }
+    }
+
+
+}
+
+int setavariable(char** parsedcmd){
+
+    if (strlen(parsedcmd[1]) != 1 || parsedcmd[1][0] > 122 || parsedcmd[1][0] < 97){
+        fprintf(stderr, "Error: invalid variable name\n");
+        return (1);
+    }
+    storedvariable[parsedcmd[1][0] - 97] = strdup(parsedcmd[2]);
+
+
+    return (0);
+}
+
+void onepipe(char** pipe, char** rdc, int* message){
+    pid_t pid;
+    pid = fork();
+
+    if (pid > 0){
+        int status;
+        waitpid(pid, &status, 0);
+        message[0] = status;
+    } else if (pid == 0){
+        if (!(strcmp(rdc[1], ">"))){
+            handlearguments(rdc[0], rdc, true);
+        } else {
+            handlearguments(pipe[0], rdc, true);
+        }
+    } else {
+        message[0] = -1;
+    }
+}
+
+int nonforkfunc(char* cmd){
+    int numargs = 0;
+    bool multargs = checkmultipleargs(cmd);
+
+    if (multargs){
+        unsigned long init_length = strlen(cmd);
+        char* storedstr[init_length];
+        char** parsedcmd;
+
+        // store the parsed cmd in the array
+        parsedcmd = parsecmd(cmd, storedstr, &numargs);
+
+        if (!strcmp(parsedcmd[0],"set")){
+            return (setavariable(parsedcmd) + 1);
+        } else if (!strcmp(parsedcmd[0],"cd")){
+            int chdirresult = chdir(parsedcmd[1]);
+
+            if (chdirresult == -1) {
+                perror("Error");
+                return (2);
+            }
+            return (1);
+        }
+    }
+    return 0;
+
 }
