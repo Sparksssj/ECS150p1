@@ -9,7 +9,7 @@
 
 
 //declarations
-int mysyscall(char *inputcmd, int* message, char** storedvariable);
+int mysyscall(char *inputcmd, int* message, int* numpipe);
 char** parsecmd(char *cmd, char** storedstr, int* numargs);
 bool checkmultipleargs(char *cmd);
 void excenoarg(char* cmd, char** rrdc, bool last);
@@ -38,6 +38,8 @@ int main(void)
 
     while (1) {
         char *nl;
+        int retval;
+        int numpipe;
 
         /* Print prompt */
         printf("sshell@ucd$ ");
@@ -66,49 +68,53 @@ int main(void)
         if (!strcmp(cmd, "exit")) {
             //QUESTION!
             fprintf(stderr, "Bye...\n");
-            fprintf(stdout, "Return status value for '%s': %d\n",
-                    cmd, 0);
+            fprintf(stderr, "+ completed 'exit' [0]\n");
             break;
         }
 
         /* Regular command */
 
-        int numpipe = mysyscall(cmd, message, storedvariable);
+        char* dupcmd = strdup(cmd);
 
+        retval= mysyscall(dupcmd, message, &numpipe);
 
-        fprintf(stdout, "+ completed '%s' ",cmd);
-        for (int i = 0; i < numpipe; ++i) {
-            fprintf(stdout, "[%d]", message[i]/256);
+        if (numpipe == 1){
+            fprintf(stderr, "+ completed '%s' [%d]\n",cmd, retval);
+        }else{
+            fprintf(stderr, "+ completed '%s' ",cmd);
+            for (int i = 0; i < numpipe; ++i) {
+                fprintf(stderr, "[%d]", message[i]/256);
+            }
+            fprintf(stderr, "\n");
         }
-        fprintf(stdout, "\n");
 
     }
 
     return EXIT_SUCCESS;
 }
 
-int mysyscall(char *inputcmd, int* message, char** storedvariable)
+int mysyscall(char *inputcmd, int* message, int* numpipe)
 {
     char* cmd;
     char** rdc;
     char** pip;
-    int numpipe;
     int curpipe;
     int* fdarray[3];
     pid_t pid;
     //remove the leading white spaces
+
     cmd = removeleadingspaces(inputcmd);
 
     //parsing of the pipe sign from the command line
-    pip = checkpipe(cmd, &numpipe);
-    curpipe = numpipe;
+    pip = checkpipe(cmd, numpipe);
+    curpipe = *numpipe;
 
     //parsing of the output redirection from the command line
-    rdc = checkredirection(pip[numpipe-1]);
+    rdc = checkredirection(pip[*numpipe-1]);
 
 
 
-    if (numpipe == 1){
+    if (*numpipe == 1){
         int whethernonfork;
 
         whethernonfork = nonforkfunc(cmd);
@@ -121,13 +127,12 @@ int mysyscall(char *inputcmd, int* message, char** storedvariable)
         if (pid > 0) {
             int status;
             waitpid(pid, &status, 0);
-            message[numpipe-1] = status;
+            message[*numpipe-1] = status;
         } else {
-            multpipe(pip, numpipe, curpipe, rdc, message, fdarray);
+            multpipe(pip, *numpipe, curpipe, rdc, message, fdarray);
         }
     }
-
-    return numpipe;
+    return 0;
 }
 
 
@@ -174,14 +179,8 @@ void excenoarg(char* cmd, char** rrdc, bool last){ // execute the no argument co
     // set the default args
     char *args[] = {cmd, NULL, NULL};
 
-    //TODO
-    if (!strcmp(cmd, "pwd")){
-        printf("%s\n", get_current_dir_name());
-        return;
-    } else{
-        forkandexce(cmd, args, rrdc, last);
-        return;
-    }
+    forkandexce(cmd, args, rrdc, last);
+
 }
 
 char* removeleadingspaces(char* cmd){
@@ -204,18 +203,6 @@ void forkandexce(char* cmd, char** args, char** rrdc, bool last){
     execvp(cmd, args);
     perror("Error");
     exit(1);
-}
-
-int changedir(char** parsedcmd) {
-
-    int chdirresult = chdir(parsedcmd[1]);
-
-    if (chdirresult == -1) {
-        perror("Error");
-        exit(1);
-    }
-
-    exit(0);
 }
 
 char** checkredirection(char* cmd) {
@@ -363,8 +350,14 @@ void handlespecialcmd(char** parsedcmd, int numargs){
 
 
     for (int i = 0; i < numargs; ++i) {
+
         if (parsedcmd[i][0] == '$') {
-            parsedcmd[i] = strdup(storedvariable[parsedcmd[i][1]-97]);
+            if (storedvariable[parsedcmd[i][1]-97] == 0){
+                parsedcmd[i] = "";
+            }else{
+                parsedcmd[i] = strdup(storedvariable[parsedcmd[i][1]-97]);
+
+            }
         }
     }
 
@@ -423,6 +416,9 @@ int nonforkfunc(char* cmd){
                 perror("Error");
                 return (2);
             }
+            return (1);
+        } else if (!strcmp(parsedcmd[0],"pwd")){
+            printf("%s\n", get_current_dir_name());
             return (1);
         }
     }
