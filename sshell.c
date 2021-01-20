@@ -24,8 +24,7 @@ void multpipe(char** pipe, int numpipe, int curpipe, char** rdc, int* message, i
 void handlearguments(char* cmd, char** rdc, bool last);
 void handlespecialcmd(char** parsedcmd, int numargs);
 int setavariable(char** parsedcmd);
-//void displayvariable(char** parsedcmd, char** storedvariable);
-void onepipe(char** pipe, char** rdc, int* message);
+int onepipe(char** pipe, char** rdc, int* message);
 int nonforkfunc(char* cmd);
 #define CMDLINE_MAX 512
 char* storedvariable[26];
@@ -48,10 +47,6 @@ int main(void)
         /* Get command line */
         fgets(cmd, CMDLINE_MAX, stdin);
 
-
-
-
-
         /* Print command line if stdin is not provided by terminal */
         if (!isatty(STDIN_FILENO)) {
             printf("%s", cmd);
@@ -62,10 +57,16 @@ int main(void)
         nl = strchr(cmd, '\n');
         if (nl)
             *nl = '\0';
+        //duplicate a cmd so that the original one will never be modified
+        char* dupcmd = strdup(cmd);
 
-        if(!strcmp(removeleadingspaces(cmd),"")) continue;
+        dupcmd = removeleadingspaces(dupcmd);
+        removetrailingspaces(dupcmd, strlen(dupcmd));
+
+        if(!strcmp(dupcmd,"")) continue;
+
         /* Builtin command */
-        if (!strcmp(cmd, "exit")) {
+        if (!strcmp(dupcmd, "exit")) {
             //QUESTION!
             fprintf(stderr, "Bye...\n");
             fprintf(stderr, "+ completed 'exit' [0]\n");
@@ -74,12 +75,12 @@ int main(void)
 
         /* Regular command */
 
-        char* dupcmd = strdup(cmd);
+
 
         retval= mysyscall(dupcmd, message, &numpipe);
 
         if (numpipe == 1){
-            fprintf(stderr, "+ completed '%s' [%d]\n",cmd, retval);
+            fprintf(stderr, "+ completed '%s' [%d]\n",cmd, retval/256);
         }else{
             fprintf(stderr, "+ completed '%s' ",cmd);
             for (int i = 0; i < numpipe; ++i) {
@@ -121,7 +122,7 @@ int mysyscall(char *inputcmd, int* message, int* numpipe)
         if (whethernonfork){
             return (whethernonfork -1);
         }
-        onepipe(pip, rdc, message);
+        return (onepipe(pip, rdc, message));
     } else {
         pid = fork();
         if (pid > 0) {
@@ -352,6 +353,13 @@ void handlespecialcmd(char** parsedcmd, int numargs){
     for (int i = 0; i < numargs; ++i) {
 
         if (parsedcmd[i][0] == '$') {
+
+         //TODO
+            if (strlen(parsedcmd[i]) != 2 || parsedcmd[i][1] > 122 || parsedcmd[i][1] < 97){
+                fprintf(stderr, "Error: invalid variable name\n");
+                exit(1);
+            }
+
             if (storedvariable[parsedcmd[i][1]-97] == 0){
                 parsedcmd[i] = "";
             }else{
@@ -376,14 +384,14 @@ int setavariable(char** parsedcmd){
     return (0);
 }
 
-void onepipe(char** pipe, char** rdc, int* message){
+int onepipe(char** pipe, char** rdc, int* message){
     pid_t pid;
     pid = fork();
 
     if (pid > 0){
         int status;
         waitpid(pid, &status, 0);
-        message[0] = status;
+        return status;
     } else if (pid == 0){
         if (!(strcmp(rdc[1], ">"))){
             handlearguments(rdc[0], rdc, true);
@@ -391,7 +399,7 @@ void onepipe(char** pipe, char** rdc, int* message){
             handlearguments(pipe[0], rdc, true);
         }
     } else {
-        message[0] = -1;
+        return (1);
     }
 }
 
