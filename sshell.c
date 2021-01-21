@@ -6,6 +6,7 @@
 #include <sys/wait.h>
 #include <stdbool.h>
 #include <fcntl.h>
+#include <sys/stat.h>
 
 
 //declarations
@@ -26,6 +27,8 @@ void handlespecialcmd(char** parsedcmd, int numargs);
 int setavariable(char** parsedcmd);
 int onepipe(char** pipe, char** rdc);
 int nonforkfunc(char* cmd);
+int handleparsingerror(char** pip, const int* numpipe);
+int countarguments(char* cmd);
 #define CMDLINE_MAX 512
 char* storedvariable[26];
 
@@ -79,6 +82,23 @@ int main(void)
 
         retval= mysyscall(dupcmd, message, &numpipe);
 
+        if (retval == 3){
+            fprintf(stderr, "Error: missing command\n");
+            continue;
+        } else if (retval == 4){
+            fprintf(stderr, "Error: too many process arguments\n");
+            continue;
+        } else if (retval == 5){
+            fprintf(stderr, "Error: mislocated output redirection\n");
+            continue;
+        } else if (retval == 6){
+            fprintf(stderr, "Error: no output file\n");
+            continue;
+        } else if (retval == 7){
+            fprintf(stderr, "Error: cannot open output file\n");
+            continue;
+        }
+
         if (numpipe == 1){
             fprintf(stderr, "+ completed '%s' [%d]\n",cmd, retval/256);
         }else{
@@ -101,6 +121,7 @@ int mysyscall(char *inputcmd, int* message, int* numpipe)
     char** pip;
     int curpipe;
     int* fdarray[3];
+    int error;
     pid_t pid;
     //remove the leading white spaces
 
@@ -113,7 +134,10 @@ int mysyscall(char *inputcmd, int* message, int* numpipe)
     //parsing of the output redirection from the command line
     rdc = checkredirection(pip[*numpipe-1]);
 
-
+    error = handleparsingerror(pip, numpipe);
+    if (error){
+        return error;
+    }
 
     if (*numpipe == 1){
         int whethernonfork;
@@ -154,6 +178,19 @@ char** parsecmd(char *cmd, char** storedstr, int* numargs){ // parse the cmd by 
         (*numargs)++;
     }
     return storedstr;
+}
+
+int countarguments(char* cmd){
+    int numargs = 0;
+    char* str = cmd;
+    char Deliminator[] = " ";
+    char *ptr = strtok(str, Deliminator);
+    while (ptr != NULL)
+    {
+        ptr = strtok(NULL, Deliminator);
+        numargs++;
+    }
+    return numargs;
 }
 
 bool checkmultipleargs(char *cmd){ // check if there are multiple arguments
@@ -328,11 +365,6 @@ void handlearguments(char* cmd, char** rdc, bool last){
         // store the parsed cmd in the array
         parsedcmd = parsecmd(cmd, storedstr, &numargs);
 
-        if (numargs > 16){
-            fprintf(stderr, "Error: too many process arguments\n");
-            exit(1);
-        }
-
         handlespecialcmd(parsedcmd, numargs);
 
 
@@ -406,8 +438,7 @@ int onepipe(char** pipe, char** rdc){
     } else {
         return (1);
     }
-
-    return 1;
+    return 0;
 }
 
 int nonforkfunc(char* cmd){
@@ -442,5 +473,42 @@ int nonforkfunc(char* cmd){
         }
     }
     return 0;
+}
 
+int handleparsingerror(char** pip, const int* numpipe){
+    int statreturn;
+    struct stat stats;
+    char** rdc;
+    int numargs;
+    for (int i = 0; i < *numpipe; i++){
+        if (!(strcmp(pip[i], ""))){
+            return 3;
+        }
+        rdc = checkredirection(pip[i]);
+        if (!(strcmp(rdc[1], ">"))){
+            if (!(strcmp(rdc[0], ""))){
+                return 3;
+            }
+            numargs = countarguments(rdc[0]);
+            if (numargs > 16){
+                return 4;
+            } else if (i != *numpipe-1){
+                return 5;
+            } else if (!(strcmp(rdc[2], ""))){
+                return 6;
+            }
+            statreturn = stat(rdc[2], &stats);
+            if (statreturn != -1){
+                if (!(stats.st_mode & S_IWGRP)){
+                    return 7;
+                }
+            }
+        } else {
+            numargs = countarguments(pip[i]);
+            if (numargs > 16){
+                return 4;
+            }
+        }
+    }
+    return 0;
 }
