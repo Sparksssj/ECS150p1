@@ -24,7 +24,7 @@ void multpipe(char** pipe, int numpipe, int curpipe, char** rdc, int* message, i
 void handlearguments(char* cmd, char** rdc, bool last);
 void handlespecialcmd(char** parsedcmd, int numargs);
 int setavariable(char** parsedcmd);
-int onepipe(char** pipe, char** rdc, int* message);
+int onepipe(char** pipe, char** rdc);
 int nonforkfunc(char* cmd);
 #define CMDLINE_MAX 512
 char* storedvariable[26];
@@ -122,7 +122,7 @@ int mysyscall(char *inputcmd, int* message, int* numpipe)
         if (whethernonfork){
             return (whethernonfork -1);
         }
-        return (onepipe(pip, rdc, message));
+        return (onepipe(pip, rdc));
     } else {
         pid = fork();
         if (pid > 0) {
@@ -389,7 +389,7 @@ int setavariable(char** parsedcmd){
     return (0);
 }
 
-int onepipe(char** pipe, char** rdc, int* message){
+int onepipe(char** pipe, char** rdc){
     pid_t pid;
     pid = fork();
 
@@ -406,6 +406,8 @@ int onepipe(char** pipe, char** rdc, int* message){
     } else {
         return (1);
     }
+
+    return 1;
 }
 
 int nonforkfunc(char* cmd){
