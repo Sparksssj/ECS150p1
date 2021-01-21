@@ -328,6 +328,11 @@ void handlearguments(char* cmd, char** rdc, bool last){
         // store the parsed cmd in the array
         parsedcmd = parsecmd(cmd, storedstr, &numargs);
 
+        if (numargs > 16){
+            fprintf(stderr, "Error: too many process arguments\n");
+            exit(1);
+        }
+
         handlespecialcmd(parsedcmd, numargs);
 
 
@@ -406,15 +411,14 @@ int onepipe(char** pipe, char** rdc, int* message){
 int nonforkfunc(char* cmd){
     int numargs = 0;
     bool multargs = checkmultipleargs(cmd);
+    unsigned long init_length = strlen(cmd);
+    char* storedstr[init_length];
+    char** parsedcmd;
+
+    // store the parsed cmd in the array
+    parsedcmd = parsecmd(cmd, storedstr, &numargs);
 
     if (multargs){
-        unsigned long init_length = strlen(cmd);
-        char* storedstr[init_length];
-        char** parsedcmd;
-
-        // store the parsed cmd in the array
-        parsedcmd = parsecmd(cmd, storedstr, &numargs);
-
         if (!strcmp(parsedcmd[0],"set")){
             return (setavariable(parsedcmd) + 1);
         } else if (!strcmp(parsedcmd[0],"cd")){
@@ -425,9 +429,14 @@ int nonforkfunc(char* cmd){
                 return (2);
             }
             return (1);
-        } else if (!strcmp(parsedcmd[0],"pwd")){
+        }
+    } else{
+        if (!strcmp(parsedcmd[0],"pwd")){
             printf("%s\n", get_current_dir_name());
             return (1);
+        } else if (!strcmp(parsedcmd[0],"set")){
+            fprintf(stderr, "Error: invalid variable name\n");
+            return (2);
         }
     }
     return 0;
