@@ -55,7 +55,8 @@ void redirection(char* filename){ // redirect the output to the given file
 
 
 void excecutecmd(char* cmd, char** args, char** rrdc, bool last){ // execute a program in this process
-    if ((!(strcmp(rrdc[1], ">"))) && (last == true)){ // redirect the output if needed
+    // redirect the output if needed
+    if ((!(strcmp(rrdc[1], ">"))) && (last == true)){
         redirection(rrdc[2]);
     }
     execvp(cmd, args);
@@ -64,35 +65,28 @@ void excecutecmd(char* cmd, char** args, char** rrdc, bool last){ // execute a p
 }
 
 void excenoarg(char* cmd, char** rrdc, bool last){ // execute the no argument command
-
     // set the default args for no argument cmd
     char *args[] = {cmd, NULL, NULL};
     excecutecmd(cmd, args, rrdc, last);
-
 }
 
 int setavariable(char** parsedcmd){
-
     // if the variable name is valid, store the value in a global variable
     if (strlen(parsedcmd[1]) != 1 || parsedcmd[1][0] > lowercaseZ || parsedcmd[1][0] < lowercaseA){
         fprintf(stderr, "Error: invalid variable name\n");
         return (1);
     }
     storedvariable[parsedcmd[1][0] - lowercaseA] = strdup(parsedcmd[2]);
-
     return (0);
 }
 
 int handlespecialcmd(char** parsedcmd, int numargs){
-
     for (int i = 0; i < numargs; ++i) {
-
         if (parsedcmd[i][0] == '$') {
             // if there is an argument start with '$', but the following content is not 'a'-'z', return error code
             if (strlen(parsedcmd[i]) != 2 || parsedcmd[i][1] > 122 || parsedcmd[i][1] < 97){
                 return 1;
             }
-
             // if variable name valid, replace the variable name by the value of the variable
             if (storedvariable[parsedcmd[i][1]-97] == 0){
                 // if the variable hasn't been set up, replace it with ""
@@ -101,18 +95,15 @@ int handlespecialcmd(char** parsedcmd, int numargs){
                 parsedcmd[i] = strdup(storedvariable[parsedcmd[i][1]-97]);
             }
         }
-
     }
     return 0;
 }
 
 void handlearguments(char* cmd, char** rdc, bool last){
-
     int numargs = 0;
     bool multargs = checkmultipleargs(cmd);
 
     if (multargs){ // if there are some arguments
-
         // create an array of char* to store parsed string
         unsigned long init_length = strlen(cmd);
         char* storedstr[init_length];
@@ -120,22 +111,16 @@ void handlearguments(char* cmd, char** rdc, bool last){
 
         // store the parsed cmd in the array
         parsedcmd = parsecmd(cmd, storedstr, &numargs);
-
         // Check if there is any arguments with '$'. If any, change them into stored value.
         handlespecialcmd(parsedcmd, numargs);
-
         // set the arguments
         char **args = malloc(sizeof(char*)*(numargs+1));
         for (int i = 0; i < numargs; ++i) {
             args[i] = parsedcmd[i];
         }
         args[-1] = NULL;
-
         // execute the cmd with the arguments
-        excecutecmd
-
-        (parsedcmd[0],args,rdc,last);
-
+        excecutecmd(parsedcmd[0],args,rdc,last);
     } else{
         // execute 1 argument program
         excenoarg(cmd,rdc,last);
@@ -195,6 +180,7 @@ int onepipe(char** pipe, char** rdc){ // handle command when no pipe line detect
         waitpid(pid, &status, 0);
         return status/ExitStatusDevision;
     } else if (pid == 0){
+        // handle arguments with or without file redirectioni
         if (!(strcmp(rdc[1], ">"))){
             handlearguments(rdc[0], rdc, true);
         } else {
@@ -209,7 +195,6 @@ int onepipe(char** pipe, char** rdc){ // handle command when no pipe line detect
 char** parsecmd(char *cmd, char** storedstr, int* numargs){ // parse the cmd by white spaces
 //source code
 //https://www.codingame.com/playgrounds/14213/how-to-play-with-strings-in-c/string-split
-
     char* str = cmd;
     //set deliminator as space
     char Deliminator[] = " ";
@@ -253,7 +238,6 @@ int nonforkfunc(char* cmd){
 
     // parse the cmd and store them in an array
     parsedcmd = parsecmd(cmd, storedstr, &numargs);
-
     if (multargs){
         // If cmd is set, try to set it. If failed, return error code.
         if (!strcmp(parsedcmd[0],"set")){
@@ -310,7 +294,6 @@ int handleparsingerror(char** pip, const int* numpipe){ // handle paring errors 
             if (handlespecialcmd(parsedcmd, numargs)){
                 return InvalidVarialbeName;
             }
-
             // if more than 16 arguments
             if (numargs > MaximunArguments){
                 return TooManyArguements;
@@ -394,6 +377,7 @@ char** checkpipe(char* cmd, int* numpipe){ // check if pipe line exists, return 
 }
 
 char* removetrailingspaces(char* str, unsigned long length){
+    // Remove trailing spaces
     for (unsigned long j = 0; j < length; j++){
         if (str[length-j-1] != ' '){
             str[length-j] = '\0';
@@ -404,6 +388,7 @@ char* removetrailingspaces(char* str, unsigned long length){
 }
 
 char* removeleadingspaces(char* cmd){
+    // Remove leading spaces
     unsigned long numspaces = 0;
     unsigned long length = strlen(cmd);
     for (unsigned long i = 0; i < length+1; i++){
@@ -423,14 +408,12 @@ int mysyscall(char *cmd, int* message, int* numpipe)
     int curpipe;
     pid_t pid;
 
-    //parsing of the pipe sign from the command line
+    // parsing of the pipe sign from the command line
     pip = checkpipe(cmd, numpipe);
     curpipe = *numpipe;
     int* fdarray[*numpipe-1];
-
-    //parsing of the output redirection from the command line
+    // parsing of the output redirection from the command line
     rdc = checkredirection(pip[*numpipe-1]);
-
     // Check if there is any parsing error. If any, return the error value to main func.
     if (handleparsingerror(pip, numpipe)) return handleparsingerror(pip, numpipe);
 
@@ -540,6 +523,5 @@ int main(void)
         }
         free(message);
     }
-
     return EXIT_SUCCESS;
 }
