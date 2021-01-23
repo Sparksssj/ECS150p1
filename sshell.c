@@ -13,15 +13,15 @@
 int mysyscall(char *inputcmd, int* message, int* numpipe);
 char** parsecmd(char *cmd, char** storedstr, int* numargs);
 bool checkmultipleargs(char *cmd);
-void excenoarg(char* cmd, char** rrdc, bool last);
+void excenoarg(char* cmd, char** rrdc);
 char* removeleadingspaces(char* cmd);
-void excecutecmd(char* cmd, char** args, char** rrdc, bool last);
+void excecutecmd(char* cmd, char** args, char** rrdc);
 char** checkredirection(char* cmd);
 void redirection(char* filename);
 char** checkpipe(char* cmd, int* numpipe);
 char* removetrailingspaces(char* str, unsigned long length);
 void multpipe(char** pipe, int numpipe, int curpipe, char** rdc, int* message, int* fdarray[]);
-void handlearguments(char* cmd, char** rdc, bool last);
+void handlearguments(char* cmd, char** rdc);
 int handlespecialcmd(char** parsedcmd, int numargs);
 int setavariable(char** parsedcmd);
 int onepipe(char** pipe, char** rdc);
@@ -54,9 +54,9 @@ void redirection(char* filename){ // redirect the output to the given file
 }
 
 
-void excecutecmd(char* cmd, char** args, char** rrdc, bool last){ // execute a program in this process
+void excecutecmd(char* cmd, char** args, char** rrdc){ // execute a program in this process
     // redirect the output if needed
-    if ((!(strcmp(rrdc[1], ">"))) && (last == true)){
+    if (!(strcmp(rrdc[1], ">"))){
         redirection(rrdc[2]);
     }
     execvp(cmd, args);
@@ -64,10 +64,10 @@ void excecutecmd(char* cmd, char** args, char** rrdc, bool last){ // execute a p
     exit(1);
 }
 
-void excenoarg(char* cmd, char** rrdc, bool last){ // execute the no argument command
+void excenoarg(char* cmd, char** rrdc){ // execute the no argument command
     // set the default args for no argument cmd
     char *args[] = {cmd, NULL, NULL};
-    excecutecmd(cmd, args, rrdc, last);
+    excecutecmd(cmd, args, rrdc);
 }
 
 int setavariable(char** parsedcmd){
@@ -99,7 +99,7 @@ int handlespecialcmd(char** parsedcmd, int numargs){
     return 0;
 }
 
-void handlearguments(char* cmd, char** rdc, bool last){
+void handlearguments(char* cmd, char** rdc){
     int numargs = 0;
     bool multargs = checkmultipleargs(cmd);
 
@@ -120,14 +120,15 @@ void handlearguments(char* cmd, char** rdc, bool last){
         }
         args[-1] = NULL;
         // execute the cmd with the arguments
-        excecutecmd(parsedcmd[0],args,rdc,last);
+        excecutecmd(parsedcmd[0],args,rdc);
     } else{
         // execute 1 argument program
-        excenoarg(cmd,rdc,last);
+        excenoarg(cmd,rdc);
     }
 }
 
-void multpipe(char** pip, int numpipe, int curpipe, char** rdc, int message[], int* fdarray[]) { // handle commands when pipe line detected
+void multpipe(char** pip, int numpipe, int curpipe, char** rdc, int message[], int* fdarray[]) {
+    // handle commands when pipe line detected
     // create the pipe and fork
     int fd[2];
     pipe(fd);
@@ -143,9 +144,9 @@ void multpipe(char** pip, int numpipe, int curpipe, char** rdc, int message[], i
             dup2(fdarray[curpipe-2][0], STDIN_FILENO);
             close(fdarray[curpipe-2][0]);
             if (!(strcmp(rdc[1], ">"))){
-                handlearguments(rdc[0], rdc, true);
+                handlearguments(rdc[0], rdc);
             } else {
-                handlearguments(pip[numpipe-1], rdc, true);
+                handlearguments(pip[numpipe-1], rdc);
             }
         }
         if  (curpipe < numpipe){ // connect middle processes to two pipes, one for input, one for output
@@ -155,7 +156,7 @@ void multpipe(char** pip, int numpipe, int curpipe, char** rdc, int message[], i
             close(fdarray[curpipe-2][1]);
             close(fdarray[curpipe-1][0]);
             close(fdarray[curpipe-1][1]);
-            handlearguments(pip[curpipe-1], rdc, false);
+            handlearguments(pip[curpipe-1], rdc);
         }
     } else if (pid == 0) {
         if (curpipe > 2){ // recursion if need to fork more process
@@ -164,7 +165,7 @@ void multpipe(char** pip, int numpipe, int curpipe, char** rdc, int message[], i
             close(fdarray[curpipe-2][0]);
             dup2(fdarray[curpipe-2][1], STDOUT_FILENO);
             close(fdarray[curpipe-2][1]);
-            handlearguments(pip[0], rdc, false);
+            handlearguments(pip[0], rdc);
         }
     } else {
         message[numpipe-curpipe] = -1;
@@ -182,9 +183,9 @@ int onepipe(char** pipe, char** rdc){ // handle command when no pipe line detect
     } else if (pid == 0){
         // handle arguments with or without file redirectioni
         if (!(strcmp(rdc[1], ">"))){
-            handlearguments(rdc[0], rdc, true);
+            handlearguments(rdc[0], rdc);
         } else {
-            handlearguments(pipe[0], rdc, true);
+            handlearguments(pipe[0], rdc);
         }
     } else {
         return (1);
@@ -193,8 +194,8 @@ int onepipe(char** pipe, char** rdc){ // handle command when no pipe line detect
 }
 
 char** parsecmd(char *cmd, char** storedstr, int* numargs){ // parse the cmd by white spaces
-//source code
-//https://www.codingame.com/playgrounds/14213/how-to-play-with-strings-in-c/string-split
+    //source code
+    //https://www.codingame.com/playgrounds/14213/how-to-play-with-strings-in-c/string-split
     char* str = cmd;
     //set deliminator as space
     char Deliminator[] = " ";
@@ -330,7 +331,8 @@ int handleparsingerror(char** pip, const int* numpipe){ // handle paring errors 
     return 0;
 }
 
-char** checkredirection(char* cmd) { // check if redirection character exists, return an array of string separated by redirection character
+char** checkredirection(char* cmd) { // check if redirection character exists
+    // return an array of string separated by redirection character
     unsigned long length = strlen(cmd);
     char** rdc = malloc(length+3);
     for (unsigned long i = 0; i < length; i++) {
@@ -352,7 +354,8 @@ char** checkredirection(char* cmd) { // check if redirection character exists, r
     return rdc;
 }
 
-char** checkpipe(char* cmd, int* numpipe){ // check if pipe line exists, return am array of string separated by pipe line
+char** checkpipe(char* cmd, int* numpipe){ // check if pipe line exists
+    // return am array of string separated by pipe line
     unsigned long length = strlen(cmd);
     char** pipe = malloc(length+4);
     int count = 0;
@@ -439,6 +442,8 @@ int mysyscall(char *cmd, int* message, int* numpipe)
             multpipe(pip, *numpipe, curpipe, rdc, message, fdarray);
         }
     }
+    free(pip);
+    free(rdc);
     return 0;
 }
 
